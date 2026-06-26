@@ -1,0 +1,17 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+logs/
+*.db
+test_video*.mp4
+debug_*.jpg
+frame_sample.jpg
+*.zip
+*.exe
+dist/
+build/
+*.spec
+.vscode/
+.idea/
+*.mp4
