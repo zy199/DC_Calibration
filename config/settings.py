@@ -22,12 +22,24 @@ class JumpDetectionSettings:
     """跳变帧检测相关配置"""
     # 末位数字区域宽度占比（相对被校时钟ROI宽度）
     last_digit_width_ratio: float = 0.30
-    # 帧差二值化阈值（0-255）
-    diff_threshold: int = 30
-    # 峰值检测窗口大小（固定帧数，避免高帧率时窗口过大吞噬多跳变）
+    # 帧差二值化阈值（0-255），0=自动根据ROI亮度计算
+    diff_threshold: int = 0
+    # 自动diff_threshold的下限和上限
+    # min不能太低(会捕捉噪点)，max不能太高(会过滤真信号)
+    diff_threshold_min: int = 3
+    diff_threshold_max: int = 30
+    # 峰值检测窗口大小
     peak_window_frames: int = 5
-    # 自适应阈值系数：threshold = median + multiplier * std
-    peak_sigma_multiplier: float = 2.0
+    # 跳变阈值系数：阈值 = max(P99 * N, P95 * M)
+    # N=3.0, M=5.0: 只捕获显著偏离噪声的真跳变
+    threshold_p99_multiplier: float = 3.0
+    threshold_p95_multiplier: float = 5.0
+    # 检测灵敏度（用户可调）：<1.0 更敏感，>1.0 更严格
+    sensitivity: float = 1.0
+    # 跳过开头不稳定期：返回第N+1个候选跳变（跳过前N个）
+    skip_initial_jumps: int = 3
+    # 最后防线——如果数据全为零时的最低阈值
+    threshold_floor: float = 0.0001
     # 粗筛阈值：帧差变化率低于此值不计算SSIM
     coarse_diff_threshold: float = 0.05
     # 高斯模糊核大小（去噪）

@@ -78,14 +78,33 @@ class SelectableRect(QGraphicsRectItem):
 
     @property
     def roi(self) -> Tuple[int, int, int, int]:
-        """返回ROI坐标 (x, y, w, h) 整数元组"""
+        """返回场景坐标ROI (x, y, w, h)。
+        QGraphicsRectItem的rect是局部坐标，pos是场景偏移。
+        两者相加才是实际场景坐标。"""
         r = self.rect()
-        return (int(r.x()), int(r.y()), int(r.width()), int(r.height()))
+        p = self.pos()
+        return (int(p.x() + r.x()), int(p.y() + r.y()),
+                int(r.width()), int(r.height()))
 
     def set_roi(self, x: int, y: int, w: int, h: int):
-        """设置ROI坐标"""
+        """设置场景坐标ROI"""
+        self.setPos(0, 0)
         self.setRect(QRectF(x, y, w, h))
         self._update_text_position()
+
+    def mouseReleaseEvent(self, event):
+        """拖拽结束：合并pos→rect + 清理状态"""
+        if self._dragging_handle == HandlePosition.NONE:
+            r = self.rect(); p = self.pos()
+            self.setPos(0, 0)
+            self.setRect(QRectF(p.x() + r.x(), p.y() + r.y(), r.width(), r.height()))
+            self._update_text_position()
+        self._dragging_handle = HandlePosition.NONE
+        self._drag_start_pos = None
+        self._drag_start_rect = None
+        self.setCursor(Qt.OpenHandCursor)
+        self._notify_change()
+        super().mouseReleaseEvent(event)
 
     def _update_text_position(self):
         """更新标签位置（矩形左上角上方）"""
@@ -171,15 +190,6 @@ class SelectableRect(QGraphicsRectItem):
         self.setRect(r)
         self._update_text_position()
         event.accept()
-
-    def mouseReleaseEvent(self, event):
-        """鼠标释放"""
-        self._dragging_handle = HandlePosition.NONE
-        self._drag_start_pos = None
-        self._drag_start_rect = None
-        self.setCursor(Qt.OpenHandCursor)
-        self._notify_change()
-        super().mouseReleaseEvent(event)
 
     def itemChange(self, change, value):
         """项目变化时更新标签位置"""

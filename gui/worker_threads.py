@@ -28,10 +28,14 @@ class JumpDetectionWorker(QThread):
     def __init__(self,
                  video_path: str,
                  roi_calibrated: tuple,
+                 sensitivity: float = 1.0,
+                 diff_threshold: int = 0,
                  parent=None):
         super().__init__(parent)
         self.video_path = video_path
         self.roi_calibrated = roi_calibrated
+        self.sensitivity = sensitivity
+        self.diff_threshold = diff_threshold
         self._cancelled = False
         self._start_frame: int = 0  # 外部可设置
 
@@ -41,7 +45,12 @@ class JumpDetectionWorker(QThread):
 
         try:
             video = VideoIO(self.video_path)
-            detector = JumpDetector()
+            from config.settings import JumpDetectionSettings
+            config = JumpDetectionSettings(
+                sensitivity=self.sensitivity,
+                diff_threshold=self.diff_threshold,
+            )
+            detector = JumpDetector(config=config)
 
             def frame_getter(idx: int):
                 if self._cancelled:

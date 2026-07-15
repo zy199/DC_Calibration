@@ -139,9 +139,10 @@ def normalize_times_for_comparison(
         cal_dt = cal_dt.replace(year=2000, month=1, day=1)
         std_dt = std_dt.replace(year=2000, month=1, day=1)
 
-    # 如果任一时钟没有毫秒，将两者毫秒都置0
-    if not (cal.has_millisecond and std.has_millisecond):
+    # 如果被校没有毫秒，只将被校毫秒置0（保留标准钟的毫秒精度）
+    if not cal.has_millisecond:
         cal_dt = cal_dt.replace(microsecond=0)
+    if not std.has_millisecond:
         std_dt = std_dt.replace(microsecond=0)
 
     return cal_dt, std_dt

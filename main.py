@@ -14,14 +14,13 @@ sys.path.insert(0, PROJECT_ROOT)
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QStackedWidget,
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QMessageBox, QSizePolicy,
-    QFileDialog, QGraphicsScene, QGraphicsPixmapItem,
-    QLineEdit,
+    QPushButton, QFrame, QMessageBox,
+    QFileDialog, QLineEdit,
 )
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import (
     QFont, QIcon, QPixmap, QImage, QDragEnterEvent,
-    QDropEvent, QPainter, QColor, QPen, QBrush,
+    QDropEvent,
 )
 
 from config.settings import settings
@@ -275,14 +274,16 @@ class ROISelectPage(QWidget):
             self._roi_selector.show()
 
     def _auto_detect_rois(self):
-        """自动检测时钟区域并预选（覆盖完整时钟行）"""
+        """自动检测时钟区域并预选（用时间方差法，不受光照影响）"""
         try:
             import cv2
             cap = cv2.VideoCapture(self.session.video_path)
             ret, frame = cap.read()
-            cap.release()
-            if not ret: return
+            if not ret:
+                cap.release()
+                return
             regions = detect_clock_regions(frame, max_candidates=2)
+            cap.release()
             if len(regions) >= 2:
                 regions.sort(key=lambda r: r[1])  # 上→下
                 self._roi_selector.rect_calibrated.set_roi(*regions[0])
@@ -436,14 +437,30 @@ class DetectionConfirmPage(QWidget):
         self.progress_fill.setFixedWidth(0)
 
     def on_enter(self):
-        """进入页面 → 首次自动检测，后续使用缓存"""
+        """进入页面 → 首次自动检测，切换视频也自动重检"""
         if not self.session.video_path or not self.session.roi_calibrated:
             self.status_label.setText("❌ 请先完成前两步")
             return
 
+        # 检测到切换了视频 → 清除旧缓存 + 立即清空UI
+        if self._video_path and self._video_path != self.session.video_path:
+            self._detection_done = False
+            self._clarity_result = None
+            self._frame_cache.clear()
+            self._confirmed = False
+            # 清空旧视频的缩略图和预览
+            self.big_frame.clear()
+            for btn in self.thumb_buttons:
+                btn.setIcon(QIcon())
+            for lbl in self.thumb_scores:
+                lbl.setText("")
+            self.jump_info.setText("")
+            self.btn_retry.setVisible(False)
+            self.btn_redetect.setVisible(False)
+            self.btn_confirm.setVisible(False)
         self._video_path = self.session.video_path
 
-        # 如果已经检测过且有结果，直接显示缓存
+        # 如果有已完成的有效缓存（同一视频），直接显示
         if self._detection_done and self._clarity_result:
             self._load_preview_frames()
             if self.session.clarity_frame_idx >= 0:
@@ -465,6 +482,7 @@ class DetectionConfirmPage(QWidget):
             self.btn_confirm.setVisible(True)
             return
 
+        # 新视频或无缓存 → 自动检测
         self._jump_attempt = 0
         self._start_detection(0)
 
@@ -496,12 +514,11 @@ class DetectionConfirmPage(QWidget):
     def _start_detection(self, start_frame: int):
         """启动跳变检测"""
         self._jump_attempt += 1
-        self._confirmed = False  # 重置确认状态
+        self._confirmed = False
         self.session.clarity_frame_idx = -1
         self.btn_confirm.setText("✅ 确认此帧")
         self.btn_confirm.setEnabled(True)
-        self.status_label.setText(
-            f"🔍 正在搜索第{self._jump_attempt}个跳变...")
+        self.status_label.setText(f"🔍 正在搜索跳变帧...")
         self.progress_fill.setFixedWidth(0)
 
         self._worker = JumpDetectionWorker(
@@ -524,8 +541,7 @@ class DetectionConfirmPage(QWidget):
 
         if not result.success:
             self.status_label.setText(
-                "❌ 未找到跳变帧 | 请检查ROI是否覆盖时钟区域，"
-                "或点击「重新寻找」重试")
+                "❌ 未找到跳变帧 | 请检查ROI或点击重新寻找")
             self._update_jump_info(result)
             self.btn_redetect.setVisible(True)
             return
@@ -694,7 +710,7 @@ class DetectionConfirmPage(QWidget):
         """找下一个跳变帧"""
         if self._current_jump_idx < 0:
             return
-        next_start = self._current_jump_idx + 5
+        next_start = self._current_jump_idx + 2  # +2避免跳过紧邻的跳变
         if next_start >= self.session.video_frame_count:
             self.status_label.setText("⚠️ 已到达视频末尾，没有更多跳变")
             return
@@ -1308,14 +1324,6 @@ def main():
     logger.info("=" * 50)
     logger.info("数字时钟自动校准系统 启动")
     logger.info("=" * 50)
-    # 后台预加载EasyOCR模型
-    import threading
-    def _preload():
-        try:
-            import easyocr; easyocr.Reader(['en'], gpu=False)
-            logger.info("EasyOCR预加载完成")
-        except: pass
-    threading.Thread(target=_preload, daemon=True).start()
 
     app = QApplication(sys.argv)
     app.setApplicationName("DC_Calibration")

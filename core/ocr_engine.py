@@ -19,39 +19,36 @@ class OCREngine:
 
     def recognize(self, roi: np.ndarray) -> str:
         if roi.size == 0: return ""
-        # EasyOCR → 模板 → 七段
-        for method in [self._recognize_easyocr,
-                       self._recognize_templates,
-                       lambda r: self._seven_seg.read_display(r)]:
-            text = method(roi)
+        # EasyOCR主引擎（预处理优化后准确率最高）
+        text = self._recognize_easyocr(roi)
+        if text:
             text = self._clean(text)
             if self._plausible(text):
                 return text
-        return ""
+        # 七段数码管回退
+        text = self._seven_seg.read_display(roi)
+        if text:
+            text = self._clean(text)
+            if self._plausible(text):
+                return text
+        # 模板匹配最终回退
+        return self._recognize_templates(roi)
 
     def recognize_two_clocks(self, frame, roi_cal, roi_std) -> Tuple[str, str]:
         x1,y1,w1,h1 = roi_cal
         x2,y2,w2,h2 = roi_std
-        cal = self.recognize(frame[y1:y1+h1, x1:x1+w1])
-        # 标准时钟可能有两行（日期+时间），分行识别
+        # 两个时钟都使用双行识别
+        cal = self._recognize_two_line(frame[y1:y1+h1, x1:x1+w1])
         std = self._recognize_two_line(frame[y2:y2+h2, x2:x2+w2])
         cal, std = self._mutual_correct(cal, std)
-
-        # 如果被校只有时间，标准钟去掉日期部分
-        cal_p = self._parse_time(cal)
-        std_p = self._parse_time(std)
-        if cal_p and std_p and not cal_p.get('has_date') and std_p.get('has_date'):
-            # 只保留标准钟的时间部分
-            std = std_p.get('time_str', std)
-
         logger.info(f"OCR: 被校='{cal}', 标准='{std}'")
         return cal, std
 
     def _recognize_two_line(self, roi: np.ndarray) -> str:
-        """识别可能有两行（日期+时间）的标准时钟"""
+        """识别可能有两行（日期+时间）的时钟"""
         h = roi.shape[0]
-        # 如果高度>100px，可能是两行，拆开识别
-        if h > 100:
+        # 如果高度>60px，可能是两行，拆开识别
+        if h > 60:
             mid = h // 2
             # 在上半部分和下半部分之间找最佳分割点（最暗的行）
             gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY) if len(roi.shape) == 3 else roi
@@ -148,68 +145,92 @@ class OCREngine:
 
     def _normalize(self, t: str) -> str:
         t = t.replace('O','0').replace('o','0').replace('S','5').replace('B','8')
+        # 常见OCR合并修正: '2826'→'2026', '28'→'20'
+        t = re.sub(r'\b28(\d{2})\b', r'20\1', t)
+        # 分割合并的数字: "202640"→"2026 40"
+        t = re.sub(r'\b(20\d{2})(\d{2})\b', r'\1 \2', t)
         nums = re.findall(r'\d+', t)
         if not nums: return t
+
+        # 修正月份/秒数常见OCR错误
+        nums_fixed = []
+        for n in nums:
+            try:
+                v = int(n)
+                if len(n) == 2:
+                    if 80 <= v <= 89: n = '0' + n[1]  # 80→00, 87→07
+                    elif 60 <= v <= 69: n = '0' + n[1]  # 60→00 (秒数OCR错误)
+                elif len(n) == 1 and v >= 6: n = '0'  # 单数字≥6→0
+            except: pass
+            nums_fixed.append(n)
+        nums = nums_fixed
+
         parts = []
         yi = -1
         for i,n in enumerate(nums):
-            # 接受20xx/19xx，也接受28xx→20xx的OCR错误
             if len(n)==4 and (n.startswith(('20','19')) or
                (n.startswith('28') and n[2:].isdigit())):
                 yi = i; break
         if yi>=0 and len(nums)>=yi+3:
             y,mo,d = nums[yi], nums[yi+1], nums[yi+2]
+            if y.startswith('28'): y = '20' + y[2:]
+            # 修正月份
+            try:
+                imo = int(mo)
+                if imo > 12: mo = str(imo % 10) if imo < 20 else '0' + str(imo % 10)
+                if imo == 0: mo = '01'
+            except: pass
             parts.append(f'{y}-{int(mo):02d}-{int(d):02d}')
             tn = nums[yi+3:]
         else:
             tn = nums
+
         if len(tn)>=2:
             h = tn[0]
-            # 如果只有2组数字
             if len(tn)==2:
-                # 如果第一个数字>2位 → SSmmm + 尾数
                 if len(tn[0]) > 2:
-                    s_str = tn[0]; extra = tn[1]
-                    h = '00'
+                    s_str = tn[0]; extra = tn[1]; h = '00'
                     if len(s_str)>=3: s = int(s_str[:2]); ms = s_str[2:]
                     else: s = int(s_str); ms = ''
                     if len(extra)==1: ms += extra
                     mi = '00'
                 else:
                     merged = tn[1]
-                    if len(merged)>=5:
-                        mi = merged[:2]; s = int(merged[2:4]); ms = merged[4:]
-                    elif len(merged)>=3:
-                        mi = '00'; s = int(merged[:2]); ms = merged[2:]
-                    else:
-                        mi = '00'; s = int(merged); ms = ''
+                    if len(merged)>=5: mi = merged[:2]; s = int(merged[2:4]); ms = merged[4:]
+                    elif len(merged)>=3: mi = '00'; s = int(merged[:2]); ms = merged[2:]
+                    else: mi = '00'; s = int(merged); ms = ''
             else:
                 mi = tn[1]; s_str = tn[2]
-                # 3组数字: H, M, SSmmm → s_str是秒+毫秒
                 if len(s_str)>=3: s = int(s_str[:2]); ms = s_str[2:]
                 else: s = int(s_str); ms = ''
+            # 修正秒数
+            if s > 59: s = s % 10
             ts = f'{int(h):02d}:{int(mi):02d}:{s:02d}'
             if ms:
-                # 如果后面还有单数字，追加到毫秒（OCR拆分修复）
-                if len(tn) >= 4 and len(tn[3]) == 1:
-                    ms += tn[3]
+                if len(tn) >= 4 and len(tn[3]) == 1: ms += tn[3]
                 ts += f'.{ms}'
-            elif len(tn) >= 4 and len(tn[3]) <= 3:
-                ts += f'.{tn[3]}'
+            elif len(tn) >= 4 and len(tn[3]) <= 3: ts += f'.{tn[3]}'
             parts.append(ts)
             return ' '.join(parts)
         m = re.search(r'(\d{1,2})[:时分](\d{1,2})[:时分](\d{1,2})(?:[\.:](\d{1,3}))?', t)
         if m:
-            h,mi,s = m.group(1),m.group(2),m.group(3)
-            ms = m.group(4)
-            r = f'{int(h):02d}:{int(mi):02d}:{int(s):02d}'
+            h,mi,s = m.group(1),m.group(2),m.group(3); ms = m.group(4)
+            si = int(s)
+            if si > 59: si = si % 10
+            r = f'{int(h):02d}:{int(mi):02d}:{si:02d}'
             if ms: r += f'.{ms}'; return r
         return t
 
     def _plausible(self, t: str) -> bool:
-        if not t or len(t)<5: return False
-        d = [c for c in t if c in DIGITS]
-        return not (len(d)>=4 and len(set(d))<=2)
+        """检查OCR结果是否合理。过滤明显乱码。"""
+        if not t or len(t) < 5: return False
+        d = [c for c in t if c in '0123456789']
+        if len(d) < 3: return False
+        if len(d) >= 4 and len(set(d)) <= 2: return False
+        times = re.findall(r'\d{1,2}:\d{2}:\d{2}', t)
+        if len(times) >= 2: return False
+        if len(d) < 6: return False
+        return True
 
     def _mutual_correct(self, cal, std):
         """用标准钟时间部分的小时纠正被校钟OCR错误"""
@@ -240,6 +261,9 @@ class OCREngine:
             # 亮度拉伸
             p2,p98 = np.percentile(gray, (2,98))
             if p98>p2+10: gray = np.clip((gray.astype(float)-p2)*255/(p98-p2),0,255).astype(np.uint8)
+            # 如果ROI太小(<200px宽)，放大2倍提高识别率
+            h,w = gray.shape[:2]
+            if w < 200: gray = cv2.resize(gray, (w*2, h*2), interpolation=cv2.INTER_CUBIC)
             r = self._easyocr.readtext(gray, detail=0, allowlist='0123456789:-. /')
             return ' '.join(r)
         except: return ""

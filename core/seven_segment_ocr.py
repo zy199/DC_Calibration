@@ -199,34 +199,29 @@ class SevenSegmentOCR:
     # ---- 内部方法 ----
 
     def _preprocess(self, roi: np.ndarray) -> np.ndarray:
-        """预处理：灰度化 → 亮度拉伸 → CLAHE → 去噪 → OTSU二值化"""
+        """预处理：灰度化 → 亮度拉伸 → 高斯去噪 → 自适应二值化"""
         if len(roi.shape) == 3:
             gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
         else:
             gray = roi.copy()
 
-        # 亮度拉伸：如果画面很暗（mean<50），拉伸到0-255
+        # 亮度拉伸
         mean_val = np.mean(gray)
-        if mean_val < 50:
-            # 线性拉伸：2%~98%百分位映射到0~255
+        if mean_val < 80:
             p2, p98 = np.percentile(gray, (2, 98))
-            if p98 > p2:
+            if p98 > p2 + 5:
                 gray = np.clip((gray.astype(float) - p2) * 255.0 / (p98 - p2), 0, 255).astype(np.uint8)
 
-        # CLAHE 自适应直方图均衡化
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-        enhanced = clahe.apply(gray)
+        # 高斯去噪（比双边滤波更适合七段数码管）
+        denoised = cv2.GaussianBlur(gray, (3, 3), 0)
 
-        # 双边滤波去噪
-        denoised = cv2.bilateralFilter(enhanced, 5, 75, 75)
+        # 自适应二值化（比OTSU更擅长保留细笔划）
+        binary = cv2.adaptiveThreshold(denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                        cv2.THRESH_BINARY, 15, 3)
 
-        # OTSU二值化
-        _, binary = cv2.threshold(denoised, 0, 255,
-                                  cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-        # 确保是暗底亮字（数字亮=255）
+        # 确保暗底亮字
         white_ratio = np.sum(binary > 0) / binary.size
-        if white_ratio > 0.6:
+        if white_ratio > 0.7:
             binary = cv2.bitwise_not(binary)
 
         return binary
@@ -286,21 +281,20 @@ class SevenSegmentOCR:
 
     def _recognize_digit(self, binary: np.ndarray) -> str:
         """
-        模板匹配法识别单个数字。
-
-        同时使用七段区域法（快速）和模板匹配（准确）双保险。
+        识别单个数字：
+        先模板匹配（整体形状最可靠），失败后用七段区域法。
         """
         h, w = binary.shape
         if h < 8 or w < 4:
             return '?'
 
-        # 方法1：七段区域法
-        result = self._recognize_segment(binary)
+        # 方法1：模板匹配（合成七段模板，整体形状匹配）
+        result = self._recognize_template(binary)
         if result != '?':
             return result
 
-        # 方法2：模板匹配回退
-        return self._recognize_template(binary)
+        # 方法2：七段区域法回退
+        return self._recognize_segment(binary)
 
     def _recognize_segment(self, binary: np.ndarray) -> str:
         """七段区域亮度法"""
