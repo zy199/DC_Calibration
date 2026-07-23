@@ -6,7 +6,6 @@
 """
 
 import sys, os, cv2
-import numpy as np
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
@@ -17,7 +16,7 @@ from PySide6.QtWidgets import (
     QPushButton, QFrame, QMessageBox,
     QFileDialog, QLineEdit,
 )
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import (
     QFont, QIcon, QPixmap, QImage, QDragEnterEvent,
     QDropEvent,
