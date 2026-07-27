@@ -1,9 +1,9 @@
 """
 跳变帧检测 — 折半查找 + 颜色/亮度 + 追踪窗确认
 =============================================
-1. 精确定位末位数字 → 折半查找(O log n)找近似跳变
-2. 追踪窗段灭确认 + 亮度比精筛
-3. 绿LED颜色像素计数法 / 红LED亮度比回退
+1. 统一管线: 精确定位末位数字 → 追踪窗提取 → 折半查找(O log n)
+2. 红绿LED均享受完整管线, 折半查找失败后按颜色分流回退
+3. 绿LED: 颜色像素计数法回退 / 红LED: 亮度比法回退
 """
 import cv2, time, numpy as np
 from dataclasses import dataclass
@@ -129,24 +129,32 @@ class JumpDetector:
         is_red=np.sum((R>G*1.5)&(R>B*1.5)&(R>25))>np.sum((G>R*1.5)&(G>B*1.5)&(G>25))
         logger.info(f"LED颜色: {'红' if is_red else '绿'}, 区域: {sw}x{sh}px")
 
-        if not is_red:
-            return self._scan_color(vpath,sx,sy,sw,sh,False,t0,start_frame,lower_threshold)
-
-        digit_roi=self._find_last_digit(f,roi)
-        if not digit_roi:
-            return self._scan_brightness(vpath,sx,sy,sw,sh,fps,t0,start_frame,lower_threshold,[])
-
-        dx,dy,dw,dh=digit_roi
-        track_wins=self._extract_tracking_windows(f,digit_roi)
-        logger.info(f"精确末位: {dw}x{dh}px, 追踪窗: {len(track_wins)}个")
-
-        # 折半查找 O(log n) → 比逐帧扫描快
+        # ===== 统一管线：红绿LED均享受完整管线 =====
         cap=cv2.VideoCapture(vpath); fc=int(cap.get(cv2.CAP_PROP_FRAME_COUNT)); cap.release()
-        result=self._binary_search(vpath,dx,dy,dw,dh,start_frame,fc,t0)
-        if result.found: return result
+        track_wins=[]
 
-        # 回退：全扫描
-        return self._scan_brightness(vpath,dx,dy,dw,dh,fps,t0,start_frame,lower_threshold,track_wins)
+        # 1. 精确末位数字定位 (灰度图处理, 红绿通用)
+        digit_roi=self._find_last_digit(f,roi)
+
+        if digit_roi:
+            dx,dy,dw,dh=digit_roi
+            # 2. 提取追踪窗 (灰度图处理, 红绿通用)
+            track_wins=self._extract_tracking_windows(f,digit_roi)
+            logger.info(f"精确末位: {dw}x{dh}px, 追踪窗: {len(track_wins)}个")
+
+            # 3. 折半查找 O(log n) (SSIM灰度比较, 红绿通用)
+            result=self._binary_search(vpath,dx,dy,dw,dh,start_frame,fc,t0)
+            if result.found: return result
+
+        # 4. 折半查找失败 → 按颜色分流回退
+        if is_red:
+            if digit_roi:
+                dx,dy,dw,dh=digit_roi
+                return self._scan_brightness(vpath,dx,dy,dw,dh,fps,t0,start_frame,lower_threshold,track_wins)
+            else:
+                return self._scan_brightness(vpath,sx,sy,sw,sh,fps,t0,start_frame,lower_threshold,[])
+        else:
+            return self._scan_color(vpath,sx,sy,sw,sh,False,t0,start_frame,lower_threshold)
 
     # ====== 颜色法（绿LED） ======
     def _scan_color(self,vpath,sx,sy,sw,sh,is_red,t0,start_frame=0,lower_threshold=False):

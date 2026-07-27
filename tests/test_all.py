@@ -1,5 +1,5 @@
 """
-自动化测试脚本 - 5视频跳变帧 + OCR全面检测
+自动化测试脚本 - 8视频跳变帧 + OCR全面检测
 ==========================================
 运行: python tests/test_all.py
 """
@@ -11,11 +11,14 @@ from core.jump_detector import JumpDetector
 from core.ocr_engine import OCREngine
 
 TARGETS = {
-    '20260617145749.mp4': 7,
-    'vid_2026-07-13_14-26-25.mp4': 1313,
-    'vid_2026-07-14_18-52-32.mp4': 864,
-    'vid_2026-07-14_19-56-39.mp4': 1581,
-    'vid_2026-07-14_20-07-00.mp4': 383,
+    '7.mp4':    6,     # 绿LED
+    '271.mp4':  270,   # 红LED
+    '383.mp4':  382,   # 红LED
+    '443.mp4':  443,   # 红LED
+    '585.mp4':  585,   # 红LED
+    '864.mp4':  864,   # 红LED
+    '1313.mp4': 1312,  # 红LED
+    '1581.mp4': 1579,  # 红LED(暗)
 }
 
 def test_jump():
