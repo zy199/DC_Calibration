@@ -21,6 +21,7 @@ class JumpDetectionResult:
     threshold: float = 0.0
     detection_time_ms: float = 0.0
     found: bool = False
+    digit_roi: tuple = None  # 末位数字ROI (x,y,w,h) for clarity eval
 
     @property
     def success(self) -> bool:
@@ -188,4 +189,6 @@ class JumpDetector:
         logger.info(f"末位数字: {dw}x{dh}px @ ({dx},{dy})")
 
         # 步骤2: 折半查找(自动选择窗口SSIM或全图SSIM)
-        return self._binary_search(vpath, dx, dy, dw, dh, start_frame, fc, t0)
+        result = self._binary_search(vpath, dx, dy, dw, dh, start_frame, fc, t0)
+        result.digit_roi = (dx, dy, dw, dh)
+        return result

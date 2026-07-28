@@ -63,6 +63,7 @@ class ClarityEvaluator:
                         roi_std: Tuple[int, int, int, int],
                         window: int = 2,
                         jump_idx: int | None = None,
+                        digit_roi: Tuple[int, int, int, int] | None = None,
                         ) -> ClarityResult:
         """
         评估跳变帧前后 window 帧（共 2*window+1 帧）的清晰度。
@@ -85,7 +86,7 @@ class ClarityEvaluator:
         for idx in range(start, end):
             try:
                 frame = frame_getter(idx)
-                score = self._evaluate_single(frame, roi_cal, roi_std, idx)
+                score = self._evaluate_single(frame, roi_cal, roi_std, idx, digit_roi)
                 scores.append(score)
             except Exception as e:
                 # 帧读取失败 → 给最低分
@@ -150,21 +151,22 @@ class ClarityEvaluator:
                          frame: np.ndarray,
                          roi_cal: Tuple[int, int, int, int],
                          roi_std: Tuple[int, int, int, int],
-                         frame_idx: int) -> ClarityScore:
-        """评估单帧清晰度"""
-        x1, y1, w1, h1 = roi_cal
-        x2, y2, w2, h2 = roi_std
+                         frame_idx: int,
+                         digit_roi: Tuple[int, int, int, int] | None = None) -> ClarityScore:
+        """评估单帧清晰度。若提供末位数字ROI则优先使用（聚焦跳变区域）"""
+        # 评估区域: 优先使用末位数字ROI, 聚焦实际发生变化的笔画区域
+        if digit_roi is not None:
+            dx, dy, dw, dh = digit_roi
+            eval_roi = frame[dy:dy + dh, dx:dx + dw]
+        else:
+            x1, y1, w1, h1 = roi_cal
+            eval_roi = frame[y1:y1 + h1, x1:x1 + w1]
 
-        cal_roi = frame[y1:y1 + h1, x1:x1 + w1]
-        std_roi = frame[y2:y2 + h2, x2:x2 + w2]
+        # 指标1: Laplacian方差
+        laplacian = self._laplacian_sharpness(eval_roi)
 
-        # 指标1: Laplacian方差（对被校和标准分别计算，取平均）
-        lap_cal = self._laplacian_sharpness(cal_roi)
-        lap_std = self._laplacian_sharpness(std_roi)
-        laplacian = (lap_cal + lap_std) / 2
-
-        # 指标2: 过渡态检测（主要检查被校时钟）
-        transition = self._transition_score(cal_roi)
+        # 指标2: 过渡态检测
+        transition = self._transition_score(eval_roi)
 
         # 指标3: SSIM一致性暂不在此处计算（需要前后帧）
         # 由调用方在normalize时处理

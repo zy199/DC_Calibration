@@ -549,7 +549,7 @@ class DetectionConfirmPage(QWidget):
         self._update_jump_info(result)
         self.status_label.setText(
             f"✅ 找到跳变帧 #{result.jump_frame_idx}，正在评估清晰度...")
-        self._evaluate_clarity(result.jump_frame_idx)
+        self._evaluate_clarity(result.jump_frame_idx, result.digit_roi)
 
     def _update_jump_info(self, result: JumpDetectionResult):
         if result.success:
@@ -560,7 +560,7 @@ class DetectionConfirmPage(QWidget):
         else:
             self.jump_info.setText("状态: 未找到跳变")
 
-    def _evaluate_clarity(self, jump_idx: int):
+    def _evaluate_clarity(self, jump_idx: int, digit_roi=None):
         """评估跳变帧及前后帧清晰度"""
         import cv2
 
@@ -579,6 +579,7 @@ class DetectionConfirmPage(QWidget):
             self.session.roi_standard,
             window=2,
             jump_idx=jump_idx,
+            digit_roi=digit_roi,
         )
         # 补充SSIM一致性（evaluate_window已做跳变帧加分+85%规则，这里只补consistency）
         self._evaluator.evaluate_consistency(
