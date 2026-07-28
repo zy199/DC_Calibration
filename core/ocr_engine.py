@@ -1,6 +1,6 @@
 """
-OCR引擎 — 离线数字时钟识别
-EasyOCR + 互相纠错 + 自学习模板
+OCR引擎 -- 全离线数字时钟识别
+七段规则法(OpenCV)主引擎 + EasyOCR可选增强 + 自学习模板
 """
 import re, cv2, numpy as np
 from typing import Tuple, Dict
@@ -19,19 +19,19 @@ class OCREngine:
 
     def recognize(self, roi: np.ndarray) -> str:
         if roi.size == 0: return ""
-        # EasyOCR主引擎（预处理优化后准确率最高）
+        # 第1层: EasyOCR (处理复杂显示: 日期+时间双行, 小字体等)
         text = self._recognize_easyocr(roi)
         if text:
             text = self._clean(text)
             if self._plausible(text):
                 return text
-        # 七段数码管回退
+        # 第2层: 七段数码管规则法 (OpenCV原生, 零依赖, 适合标准七段显示)
         text = self._seven_seg.read_display(roi)
         if text:
             text = self._clean(text)
             if self._plausible(text):
                 return text
-        # 模板匹配最终回退
+        # 第3层: 自学习模板匹配 (OpenCV原生, 用户驱动学习)
         return self._recognize_templates(roi)
 
     def recognize_two_clocks(self, frame, roi_cal, roi_std) -> Tuple[str, str]:

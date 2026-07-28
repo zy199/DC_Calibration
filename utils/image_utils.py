@@ -9,109 +9,6 @@ import numpy as np
 from typing import Tuple, Optional
 
 
-def preprocess_for_ocr(image: np.ndarray) -> np.ndarray:
-    """
-    OCR预处理管线：灰度化 → CLAHE → 双边滤波 → 自适应二值化。
-
-    Args:
-        image: BGR或灰度输入图像
-
-    Returns:
-        二值化后的图像，适合直接送入OCR
-    """
-    # 转灰度
-    if len(image.shape) == 3:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = image.copy()
-
-    # CLAHE 自适应直方图均衡化（改善不均匀光照）
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    enhanced = clahe.apply(gray)
-
-    # 双边滤波（去噪保边）
-    denoised = cv2.bilateralFilter(enhanced, 5, 75, 75)
-
-    # 自适应二值化
-    binary = cv2.adaptiveThreshold(
-        denoised, 255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        blockSize=11,
-        C=2
-    )
-
-    return binary
-
-
-def extract_digit_region(roi: np.ndarray,
-                         last_digit_ratio: float = 0.30) -> np.ndarray:
-    """
-    从时钟ROI中提取末位数字区域。
-
-    Args:
-        roi: 时钟显示区域图像
-        last_digit_ratio: 末位数字区域占ROI宽度的比例
-
-    Returns:
-        末位数字区域图像
-    """
-    h, w = roi.shape[:2]
-    digit_w = int(w * last_digit_ratio)
-    return roi[:, w - digit_w:]
-
-
-def detect_display_type(roi: np.ndarray) -> str:
-    """
-    检测时钟显示类型。
-
-    通过边缘密度和轮廓形状分析判断是七段数码管还是LCD。
-
-    Args:
-        roi: 时钟显示区域图像（BGR或灰度）
-
-    Returns:
-        'seven_segment' | 'lcd' | 'unknown'
-    """
-    if len(roi.shape) == 3:
-        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = roi.copy()
-
-    # Canny边缘检测
-    edges = cv2.Canny(gray, 50, 150)
-
-    # 霍夫线检测：七段数码管有大量细长直线段
-    lines = cv2.HoughLinesP(edges, 1, np.pi / 180,
-                            threshold=30, minLineLength=10, maxLineGap=3)
-    line_count = len(lines) if lines is not None else 0
-
-    # 二值化后轮廓分析
-    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL,
-                                   cv2.CHAIN_APPROX_SIMPLE)
-
-    # 统计细长轮廓（七段特征）
-    thin_contour_count = 0
-    for c in contours:
-        x, y, w, h = cv2.boundingRect(c)
-        if w > 0 and h > 0:
-            aspect_ratio = max(w / h, h / w)
-            if aspect_ratio > 3:  # 细长形状（段）
-                thin_contour_count += 1
-
-    # 判断逻辑
-    total_pixels = gray.shape[0] * gray.shape[1]
-    line_density = line_count / (total_pixels / 10000)  # 归一化
-
-    if line_density > 0.5 and thin_contour_count > 5:
-        return 'seven_segment'
-    elif line_count > 5:
-        return 'lcd'
-    else:
-        return 'unknown'
-
-
 def detect_clock_regions(frame: np.ndarray,
                          max_candidates: int = 2
                          ) -> list[Tuple[int, int, int, int]]:
@@ -157,6 +54,8 @@ def detect_clock_regions(frame: np.ndarray,
     # 分别合并红色和绿色区域（不能混在一起！）
     red_merged = _merge_nearby_regions(red_regions, fh, fw)
     green_merged = _merge_nearby_regions(green_regions, fh, fw)
+
+
 
     if len(red_merged) >= 1 and len(green_merged) >= 1:
         # 红色（上面=被校）+ 绿色（下面=标准）
@@ -336,20 +235,43 @@ def detect_clock_regions(frame: np.ndarray,
 
 
 def _extract_regions_from_binary(binary, fh, fw):
-    """从二值图中提取连通区域作为ROI"""
+    """从二值图中提取连通区域作为ROI, 同时捕获宽区域附近的窄高数字"""
     contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    regions = []
+    wide_regions = []
+    narrow_regions = []
     for cnt in contours:
         x, y, cw, ch = cv2.boundingRect(cnt)
-        if cw > 60 and ch > 20 and cw < fw * 0.8:
-            pad_x = 10
-            pad_y = 8
-            rx = max(0, x - pad_x)
-            ry = max(0, y - pad_y)
-            rw = min(fw - rx, cw + 2 * pad_x)
-            rh = min(fh - ry, ch + 2 * pad_y)
-            regions.append((rx, ry, rw, rh))
-    return regions
+        if cw < 6 or ch < 15 or cw > fw * 0.8:
+            continue
+        aspect = ch / cw if cw > 0 else 0
+        pad_x = 10; pad_y = 8
+        rx = max(0, x - pad_x); ry = max(0, y - pad_y)
+        rw = min(fw - rx, cw + 2 * pad_x); rh = min(fh - ry, ch + 2 * pad_y)
+        if cw > 60:
+            wide_regions.append((rx, ry, rw, rh))
+        elif aspect > 2.5:
+            # 窄高数字(如"1"), 后面会合并到最近的宽区域
+            narrow_regions.append((rx, ry, rw, rh))
+
+    # 将窄高数字合并到垂直对齐的宽区域
+    for nr in narrow_regions:
+        nx, ny, nw, nh = nr
+        best_wr, best_dist = None, 999
+        for wr in wide_regions:
+            wx, wy, ww, wh = wr
+            # 垂直对齐: y中心接近, x接近且在右侧
+            if abs((ny+nh//2) - (wy+wh//2)) < wh * 1.2:
+                dist = nx - (wx + ww)
+                if 0 <= dist < ww * 1.5 and dist < best_dist:
+                    best_dist = dist
+                    best_wr = wr
+        if best_wr:
+            wx, wy, ww, wh = best_wr
+            new_r = (wx, wy, max(wx+ww, nx+nw) - wx, max(wh, nh))
+            wide_regions.remove(best_wr)
+            wide_regions.append(new_r)
+
+    return wide_regions
 
 
 def _merge_nearby_regions(regions, fh, fw):
@@ -384,48 +306,3 @@ def _merge_nearby_regions(regions, fh, fw):
             merged.append(r1)
         regions = merged
     return regions
-
-
-def _rect_iou(a: Tuple[int, int, int, int],
-              b: Tuple[int, int, int, int]) -> float:
-    """计算两个矩形的IoU"""
-    ax1, ay1, aw, ah = a
-    ax2, ay2 = ax1 + aw, ay1 + ah
-    bx1, by1, bw, bh = b
-    bx2, by2 = bx1 + bw, by1 + bh
-
-    inter_x1 = max(ax1, bx1)
-    inter_y1 = max(ay1, by1)
-    inter_x2 = min(ax2, bx2)
-    inter_y2 = min(ay2, by2)
-
-    inter_w = max(0, inter_x2 - inter_x1)
-    inter_h = max(0, inter_y2 - inter_y1)
-    inter_area = inter_w * inter_h
-
-    area_a = aw * ah
-    area_b = bw * bh
-    union = area_a + area_b - inter_area
-    return inter_area / union if union > 0 else 0.0
-
-
-def resize_keep_aspect(image: np.ndarray,
-                       target_size: Tuple[int, int]) -> np.ndarray:
-    """
-    保持宽高比的缩放。
-
-    Args:
-        image: 输入图像
-        target_size: (宽, 高)
-
-    Returns:
-        缩放后的图像
-    """
-    h, w = image.shape[:2]
-    tw, th = target_size
-
-    scale = min(tw / w, th / h)
-    new_w, new_h = int(w * scale), int(h * scale)
-
-    resized = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
-    return resized
