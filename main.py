@@ -63,7 +63,7 @@ class WelcomePage(QWidget):
         title_col = QVBoxLayout()
         title = QLabel("数字时钟自动校准系统")
         title.setFont(QFont("Microsoft YaHei", 22, QFont.Bold))
-        title.setStyleSheet("color: #e0e0ff;")
+        title.setStyleSheet("color: #c8bfa5;")
         title_col.addWidget(title)
 
         subtitle = QLabel("基于视频图像识别的时间频率计量校准工具")
@@ -86,7 +86,7 @@ class WelcomePage(QWidget):
         # 工作流程说明
         steps_frame = QFrame()
         steps_frame.setStyleSheet(
-            "background: #0d0d1f; border: 1px solid #2a2a4a; border-radius: 10px;")
+            "background: #22252d; border: 1px solid #3a414d; border-radius: 10px;")
         steps_layout = QHBoxLayout(steps_frame)
         steps_layout.setContentsMargins(20, 15, 20, 15)
 
@@ -101,14 +101,14 @@ class WelcomePage(QWidget):
             step.addWidget(icon)
             desc = QLabel(text)
             desc.setAlignment(Qt.AlignCenter)
-            desc.setStyleSheet("color: #aaa; font-size: 10pt;")
+            desc.setStyleSheet("color: #a0a5ad; font-size: 10pt;")
             step.addWidget(desc)
             steps_layout.addLayout(step)
             if i < 3:
                 arrow = QLabel("▸")
                 arrow.setFont(QFont("Microsoft YaHei", 14))
                 arrow.setAlignment(Qt.AlignCenter)
-                arrow.setStyleSheet("color: #5C6BC0;")
+                arrow.setStyleSheet("color: #b8a05e;")
                 arrow.setFixedWidth(20)
                 steps_layout.addWidget(arrow)
         layout.addWidget(steps_frame)
@@ -212,7 +212,7 @@ class WelcomePage(QWidget):
             event.acceptProposedAction()
             self.drop_area.setStyleSheet(
                 "QFrame#drop_area { border: 2px dashed #4CAF50; "
-                "border-radius: 12px; background-color: #0d1f0d; }")
+                "border-radius: 12px; background-color: #1a241a; }")
 
     def dragLeaveEvent(self, event):
         self.drop_area.setStyleSheet("")
@@ -353,7 +353,7 @@ class DetectionConfirmPage(QWidget):
         self.big_frame.setMinimumSize(500, 280)
         self.big_frame.setAlignment(Qt.AlignCenter)
         self.big_frame.setStyleSheet(
-            "background: #0a0a14; border: 1px solid #333; border-radius: 6px;")
+            "background: #1e2128; border: 1px solid #3e4450; border-radius: 6px;")
         main_area.addWidget(self.big_frame, 3)
 
         # 右侧信息面板
@@ -361,7 +361,7 @@ class DetectionConfirmPage(QWidget):
 
         # 状态
         self.status_label = QLabel("准备检测...")
-        self.status_label.setStyleSheet("color: #aaa; font-size: 11pt;")
+        self.status_label.setStyleSheet("color: #a0a5ad; font-size: 11pt;")
         info_panel.addWidget(self.status_label)
 
         # 跳变信息
@@ -405,7 +405,7 @@ class DetectionConfirmPage(QWidget):
             btn = QPushButton()
             btn.setFixedSize(160, 100)
             btn.setStyleSheet(
-                "QPushButton { background: #0a0a14; border: 2px solid #333; "
+                "QPushButton { background: #1e2128; border: 2px solid #3e4450; "
                 "border-radius: 4px; padding: 0; }"
                 "QPushButton:hover { border-color: #666; }")
             btn.clicked.connect(lambda checked, idx=i: self._on_thumb_click(idx))
@@ -423,7 +423,7 @@ class DetectionConfirmPage(QWidget):
         self.progress_frame = QFrame()
         self.progress_frame.setFixedHeight(8)
         self.progress_frame.setStyleSheet(
-            "background: #3a3a4a; border: 1px solid #555; border-radius: 4px;")
+            "background: #3a4048; border: 1px solid #555; border-radius: 4px;")
         layout.addWidget(self.progress_frame)
 
         self.progress_fill = QFrame(self.progress_frame)
@@ -431,7 +431,7 @@ class DetectionConfirmPage(QWidget):
         self.progress_fill.move(1, 1)
         self.progress_fill.setStyleSheet(
             "background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
-            "stop:0 #1a237e, stop:0.5 #3949ab, stop:1 #5c6bc0); "
+            "stop:0 #6b7356, stop:0.5 #8a956e, stop:1 #9a8d60); "
             "border-radius: 3px;")
         self.progress_fill.setFixedWidth(0)
 
@@ -660,13 +660,13 @@ class DetectionConfirmPage(QWidget):
             # 边框颜色
             if s.frame_idx == self._clarity_result.best_idx:
                 self.thumb_buttons[i].setStyleSheet(
-                    "QPushButton { background: #0a0a14; "
+                    "QPushButton { background: #1e2128; "
                     "border: 2px solid #4CAF50; border-radius: 4px; padding: 0; }"
                     "QPushButton:hover { border-color: #66BB6A; }")
             else:
                 self.thumb_buttons[i].setStyleSheet(
-                    "QPushButton { background: #0a0a14; "
-                    "border: 2px solid #333; border-radius: 4px; padding: 0; }"
+                    "QPushButton { background: #1e2128; "
+                    "border: 2px solid #3e4450; border-radius: 4px; padding: 0; }"
                     "QPushButton:hover { border-color: #666; }")
 
     def _on_thumb_click(self, thumb_idx: int):
@@ -691,18 +691,18 @@ class DetectionConfirmPage(QWidget):
             for i, s in enumerate(self._clarity_result.scores):
                 if s.frame_idx == idx:
                     self.thumb_buttons[i].setStyleSheet(
-                        "QPushButton { background: #0a0a14; "
-                        "border: 2px solid #2196F3; border-radius: 4px; padding: 0; }"
-                        "QPushButton:hover { border-color: #42A5F5; }")
+                        "QPushButton { background: #1e2128; "
+                        "border: 2px solid #c8a945; border-radius: 4px; padding: 0; }"
+                        "QPushButton:hover { border-color: #d4b860; }")
                 elif s.frame_idx == self._clarity_result.best_idx:
                     self.thumb_buttons[i].setStyleSheet(
-                        "QPushButton { background: #0a0a14; "
+                        "QPushButton { background: #1e2128; "
                         "border: 2px solid #4CAF50; border-radius: 4px; padding: 0; }"
                         "QPushButton:hover { border-color: #66BB6A; }")
                 else:
                     self.thumb_buttons[i].setStyleSheet(
-                        "QPushButton { background: #0a0a14; "
-                        "border: 2px solid #333; border-radius: 4px; padding: 0; }"
+                        "QPushButton { background: #1e2128; "
+                        "border: 2px solid #3e4450; border-radius: 4px; padding: 0; }"
                         "QPushButton:hover { border-color: #666; }")
 
     def _find_next_jump(self):
@@ -781,12 +781,12 @@ class ResultPage(QWidget):
         cl.setSpacing(8)
         cl.setContentsMargins(0, 0, 0, 0)
 
-        input_style = ("color: #e0e0e0; background: #0a0a14; border: 1px solid #555; "
+        input_style = ("color: #d0d3d8; background: #1e2128; border: 1px solid #555; "
                        "border-radius: 4px; padding: 5px 8px;")
 
         # === 时间识别区 ===
         time_box = QFrame()
-        time_box.setStyleSheet("background: #0d0d1f; border: 1px solid #333; border-radius: 6px; padding: 10px;")
+        time_box.setStyleSheet("background: #22252d; border: 1px solid #3e4450; border-radius: 6px; padding: 10px;")
         tl = QVBoxLayout(time_box)
         tl.setSpacing(6)
 
@@ -795,7 +795,7 @@ class ResultPage(QWidget):
         self.img_cal = QLabel()
         self.img_cal.setFixedSize(300, 70)
         self.img_cal.setAlignment(Qt.AlignCenter)
-        self.img_cal.setStyleSheet("background: #050510; border: 1px solid #333; border-radius: 3px;")
+        self.img_cal.setStyleSheet("background: #15181d; border: 1px solid #3e4450; border-radius: 3px;")
         self.img_cal.setScaledContents(True)
         row_cal.addWidget(self.img_cal)
         row_cal.addWidget(QLabel("🔴"))
@@ -816,7 +816,7 @@ class ResultPage(QWidget):
         self.img_std = QLabel()
         self.img_std.setFixedSize(300, 70)
         self.img_std.setAlignment(Qt.AlignCenter)
-        self.img_std.setStyleSheet("background: #050510; border: 1px solid #333; border-radius: 3px;")
+        self.img_std.setStyleSheet("background: #15181d; border: 1px solid #3e4450; border-radius: 3px;")
         self.img_std.setScaledContents(True)
         row_std.addWidget(self.img_std)
         row_std.addWidget(QLabel("🟢"))
@@ -847,7 +847,7 @@ class ResultPage(QWidget):
 
         # === 设备信息区 ===
         info_box = QFrame()
-        info_box.setStyleSheet("background: #0d0d1f; border: 1px solid #333; border-radius: 6px; padding: 10px;")
+        info_box.setStyleSheet("background: #22252d; border: 1px solid #3e4450; border-radius: 6px; padding: 10px;")
         il = QVBoxLayout(info_box)
         il.setSpacing(6)
         il.addWidget(QLabel("📋 设备信息（选填）"))
@@ -1190,12 +1190,12 @@ class MainWindow(QMainWindow):
     def _setup_navbar(self):
         navbar = QWidget()
         navbar.setFixedHeight(56)
-        navbar.setStyleSheet("background: #0d0d1a; border-top: 1px solid #333;")
+        navbar.setStyleSheet("background: #1a1d24; border-top: 1px solid #3e4450;")
         layout = QHBoxLayout(navbar)
         layout.setContentsMargins(20, 8, 20, 8)
 
         self.step_indicator = QLabel("步骤 0/4")
-        self.step_indicator.setStyleSheet("color: #aaa; font-size: 11pt;")
+        self.step_indicator.setStyleSheet("color: #a0a5ad; font-size: 11pt;")
         layout.addWidget(self.step_indicator)
 
         # 步骤点
@@ -1265,7 +1265,7 @@ class MainWindow(QMainWindow):
         for i, dot in enumerate(self.step_dots):
             if i == self.current_step:
                 dot.setText("●")
-                dot.setStyleSheet("color: #5C6BC0; font-size: 14pt;")
+                dot.setStyleSheet("color: #b8a05e; font-size: 14pt;")
             elif i < self.current_step:
                 dot.setText("●")
                 dot.setStyleSheet("color: #4CAF50; font-size: 14pt;")
@@ -1279,41 +1279,41 @@ class MainWindow(QMainWindow):
 # 样式表
 # ============================================================
 APP_STYLESHEET = """
-QMainWindow { background-color: #0a0a14; color: #e0e0e0; }
-QWidget { background-color: #0a0a14; color: #e0e0e0; }
-QLabel { color: #e0e0e0; background: transparent; }
+QMainWindow { background-color: #1c1f26; color: #d0d3d8; }
+QWidget { background-color: #1c1f26; color: #d0d3d8; }
+QLabel { color: #d0d3d8; background: transparent; }
 QPushButton {
-    background-color: #1a1a3e; color: #e0e0e0;
-    border: 1px solid #444; border-radius: 6px;
+    background-color: #2a2f38; color: #d0d3d8;
+    border: 1px solid #3e4450; border-radius: 6px;
     padding: 8px 16px; font-size: 11pt;
 }
-QPushButton:hover { background-color: #2a2a5e; border-color: #666; }
-QPushButton:pressed { background-color: #151530; }
-QPushButton:disabled { background-color: #111; color: #555; border-color: #222; }
+QPushButton:hover { background-color: #353b46; border-color: #5a6575; }
+QPushButton:pressed { background-color: #23272e; }
+QPushButton:disabled { background-color: #1a1d23; color: #555; border-color: #2a2e36; }
 QFrame#drop_area {
-    border: 2px dashed #444; border-radius: 12px; background-color: #0d0d1f;
+    border: 2px dashed #3e4450; border-radius: 12px; background-color: #22252d;
 }
-QFrame#drop_area:hover { border-color: #788; background-color: #12122a; }
-QStatusBar { background: #0d0d1a; color: #888; border-top: 1px solid #333; }
+QFrame#drop_area:hover { border-color: #6b7d8e; background-color: #262a33; }
+QStatusBar { background: #1a1d24; color: #808590; border-top: 1px solid #2e333c; }
 QLineEdit {
-    background-color: #0a0a14; color: #e0e0e0;
-    border: 1px solid #555; border-radius: 4px; padding: 4px 8px;
+    background-color: #1e2128; color: #d0d3d8;
+    border: 1px solid #3e4450; border-radius: 4px; padding: 4px 8px;
 }
 QScrollArea { background: transparent; border: none; }
 QScrollBar:vertical {
-    background: #0a0a14; width: 8px; border-radius: 4px;
+    background: #1c1f26; width: 8px; border-radius: 4px;
 }
 QScrollBar::handle:vertical {
-    background: #333; border-radius: 4px; min-height: 30px;
+    background: #3e4450; border-radius: 4px; min-height: 30px;
 }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QMessageBox {
-    background-color: #0d0d1f; color: #e0e0e0;
+    background-color: #22252d; color: #d0d3d8;
 }
-QMessageBox QLabel { color: #e0e0e0; }
+QMessageBox QLabel { color: #d0d3d8; }
 QMessageBox QPushButton {
-    background-color: #1a1a3e; color: #e0e0e0;
-    border: 1px solid #444; border-radius: 4px;
+    background-color: #2a2f38; color: #d0d3d8;
+    border: 1px solid #3e4450; border-radius: 4px;
     padding: 6px 20px; min-width: 80px;
 }
 """
