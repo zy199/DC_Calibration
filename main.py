@@ -549,7 +549,25 @@ class DetectionConfirmPage(QWidget):
         self._update_jump_info(result)
         self.status_label.setText(
             f"✅ 找到跳变帧 #{result.jump_frame_idx}，正在评估清晰度...")
-        self._evaluate_clarity(result.jump_frame_idx, result.digit_roi)
+
+        # 用MSER提取标准时钟的末位数字ROI（失败则用ROI右侧30%回退）
+        import cv2
+        cap = cv2.VideoCapture(self._video_path)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 100)
+        _, f100 = cap.read()
+        cap.release()
+        digit_roi_std = None
+        if f100 is not None and self.session.roi_standard:
+            from core.jump_detector import JumpDetector
+            jd = JumpDetector()
+            digit_roi_std = jd._find_digit_mser(f100, self.session.roi_standard)
+            if digit_roi_std is None:
+                x, y, w, h = self.session.roi_standard
+                mid_y = y + h // 2
+                strip_w = int(w * 0.30)
+                digit_roi_std = (x + w - strip_w, mid_y, strip_w, h - h // 2)
+
+        self._evaluate_clarity(result.jump_frame_idx, result.digit_roi, digit_roi_std)
 
     def _update_jump_info(self, result: JumpDetectionResult):
         if result.success:
@@ -560,8 +578,8 @@ class DetectionConfirmPage(QWidget):
         else:
             self.jump_info.setText("状态: 未找到跳变")
 
-    def _evaluate_clarity(self, jump_idx: int, digit_roi=None):
-        """评估跳变帧及前后帧清晰度"""
+    def _evaluate_clarity(self, jump_idx: int, digit_roi_cal=None, digit_roi_std=None):
+        """评估跳变帧及前后帧清晰度——两时钟末位ROI同时评估"""
         import cv2
 
         cap = cv2.VideoCapture(self._video_path)
@@ -579,29 +597,28 @@ class DetectionConfirmPage(QWidget):
             self.session.roi_standard,
             window=2,
             jump_idx=jump_idx,
-            digit_roi=digit_roi,
+            digit_roi_cal=digit_roi_cal,
+            digit_roi_std=digit_roi_std,
         )
-        # 补充SSIM一致性（evaluate_window已做跳变帧加分+85%规则，这里只补consistency）
+        # 补充SSIM一致性
         self._evaluator.evaluate_consistency(
-            result.scores, getter, self.session.roi_calibrated)
-        # 重算combined（evaluate_window已算过但consistency刚填充，需更新）
+            result.scores, getter,
+            self.session.roi_calibrated, self.session.roi_standard,
+            digit_roi_cal=digit_roi_cal, digit_roi_std=digit_roi_std)
+        # 重算combined
         w_lap = self._evaluator.config.laplacian_weight
         w_trans = self._evaluator.config.transition_weight
         w_cons = self._evaluator.config.consistency_weight
         for s in result.scores:
             if s.frame_idx == jump_idx:
-                s.consistency = 1.0
+                s.consistency = max(s.consistency, 0.5)
             s.combined = w_lap * s.laplacian + w_trans * s.transition + w_cons * s.consistency
-            if s.frame_idx == jump_idx:
-                s.combined += 0.25
-            elif s.frame_idx > jump_idx:
-                s.combined += 0.03
-        best = max(result.scores, key=lambda s: s.combined)
-        jump_s = next((s for s in result.scores if s.frame_idx == jump_idx), None)
-        if jump_s and best.frame_idx != jump_idx and jump_s.combined >= best.combined * 0.70:
-            best = jump_s
+        valid = [s for s in result.scores if s.frame_idx >= jump_idx] or result.scores
+        best = max(valid, key=lambda s: s.combined)
         result.best_idx = best.frame_idx
         result.best_score = best.combined
+        result.is_jump = (best.frame_idx == jump_idx)
+        result.is_next = (best.frame_idx == jump_idx + 1)
 
         cap.release()
         self._clarity_result = result
@@ -617,8 +634,9 @@ class DetectionConfirmPage(QWidget):
             self.status_label.setText(
                 f"⚠️ 清晰度偏低（{result.best_score:.2f}），可点击「找下一个跳变」")
         else:
+            loc = "跳变帧" if result.is_jump else (f"跳变+{result.best_idx - jump_idx}" if result.is_next else "其他")
             self.status_label.setText(
-                f"✅ 检测完成 | 推荐帧 #{result.best_idx} | "
+                f"✅ 检测完成 | 最佳清晰帧 #{result.best_idx}[{loc}] | "
                 f"清晰度: {result.best_score:.2f}")
 
         self._detection_done = True
